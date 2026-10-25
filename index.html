@@ -148,7 +148,7 @@ body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opa
 <section id="setup" class="wrap">
   <div class="keybox" id="playersBox">
     <h2>Players</h2>
-    <p>One name per line. Each battle draws two people who haven't gone yet this round, and you pick the winner. Winners move on until there's a champion.</p>
+    <p>One name per line. Each battle draws two people who haven't gone yet this round, and you pick the winner. If a round has an odd number of people, its last battle is a 3-way. Winners move on until there's a champion.</p>
     <textarea id="playerList" placeholder="Alex&#10;Jordan&#10;Sam"></textarea>
     <div class="keyrow">
       <button class="btn primary" id="startT">Start tournament</button>
@@ -191,7 +191,7 @@ body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opa
 <section id="show" class="wrap" hidden>
   <div class="marquee"><div class="card">
     <div class="eyebrow" id="upLabel">Up next</div>
-    <div class="vs" id="vsRow" hidden><span id="nameA"></span><em id="vsEm">vs</em><span id="nameB"></span></div>
+    <div class="vs" id="vsRow" hidden></div>
     <h2 id="songTitle">—</h2>
     <div class="artist" id="songArtist"></div>
     <div class="sub" id="songSub"></div>
@@ -485,12 +485,14 @@ let playersText = LS.get("lsc.players","");
 let rigs = LS.get("lsc.rigs",{});              // player name -> song number
 let T = LS.get("lsc.T",null), Th = LS.get("lsc.Th",[]);
 if(T && T.phase==="playing") T.phase="up";
+if(T && T.cur && !T.cur.names) T.cur.names=[T.cur.a,T.cur.b];
 const getPlayers = () => [...new Set(playersText.split("\n").map(s=>s.trim()).filter(Boolean))];
 const saveT = () => { LS.set("lsc.T",T); LS.set("lsc.Th",Th); };
 const snap = () => { Th.push(JSON.stringify(T)); if(Th.length>40) Th.shift(); };
 const rand = a => a[Math.floor(Math.random()*a.length)];
-const roundName = n => n===2?"Final":n===4?"Semifinals":n===8?"Quarterfinals":`Round of ${n}`;
+const roundName = n => n<=3?"Final":n===4?"Semifinals":n===8?"Quarterfinals":`Round of ${n}`;
 const battlesDone = () => T.results.filter(r=>!r.bye).length;
+const namesOf = r => r.names || [r.a,r.b];
 const battlesTotal = () => Math.floor(T.alive.length/2);
 let rolling = null;
 
@@ -506,10 +508,10 @@ function drawMatch(){
   T.cur = null;
   for(;;){
     if(T.pool.length>=2){
-      const a=rand(T.pool); T.pool.splice(T.pool.indexOf(a),1);
-      const b=rand(T.pool); T.pool.splice(T.pool.indexOf(b),1);
-      const s=pickSong([a,b]); T.used.push(s);
-      T.cur={a,b,song:s}; T.phase="up"; return;
+      const k = T.pool.length===3 ? 3 : 2, names=[];   // odd round: last battle is a 3-way
+      for(let i=0;i<k;i++){ const x=rand(T.pool); T.pool.splice(T.pool.indexOf(x),1); names.push(x); }
+      const s=pickSong(names); T.used.push(s);
+      T.cur={names,song:s}; T.phase="up"; return;
     }
     if(T.pool.length===1){ const x=T.pool.pop(); T.winners.push(x); T.results.push({bye:x}); continue; }
     if(T.winners.length<=1){ T.champion=T.winners[0]||null; T.phase="champion"; return; }
@@ -530,16 +532,16 @@ function pickSong(names){
 }
 function swap(){
   if(!T || !T.cur || T.phase!=="up") return;
-  snap(); T.cur.song = pickSong([T.cur.a,T.cur.b]); T.used.push(T.cur.song); saveT(); renderShow();
+  snap(); T.cur.song = pickSong(T.cur.names); T.used.push(T.cur.song); saveT(); renderShow();
 }
 function redraw(){
   if(!T || !T.cur || T.phase!=="up") return;
-  snap(); T.pool.push(T.cur.a,T.cur.b); T.used = T.used.filter(n=>n!==T.cur.song);
+  snap(); T.pool.push(...T.cur.names); T.used = T.used.filter(n=>n!==T.cur.song);
   drawMatch(); saveT(); reveal();
 }
 function win(x){
   if(!T || T.phase!=="judge") return;
-  snap(); T.results.push({a:T.cur.a,b:T.cur.b,winner:x,song:T.cur.song}); T.winners.push(x);
+  snap(); T.results.push({names:T.cur.names,winner:x,song:T.cur.song}); T.winners.push(x);
   drawMatch(); saveT(); $("showNote").textContent="";
   if(T.phase==="champion") renderShow(); else reveal();
 }
@@ -555,7 +557,7 @@ function reveal(){
   const names = T.alive.length>1 ? T.alive : getPlayers(), t0 = Date.now();
   rolling = setInterval(()=>{
     if(Date.now()-t0>1200){ clearInterval(rolling); rolling=null; renderShow(); return; }
-    $("nameA").textContent=rand(names); $("nameB").textContent=rand(names);
+    $("vsRow").querySelectorAll("span").forEach(el=>el.textContent=rand(names));
   },80);
   renderShow();
 }
@@ -580,7 +582,7 @@ function renderResults(){
   if(!T){ $("resultsBox").hidden=true; return; }
   $("resultsBox").hidden=false;
   const rows = r => r.map(x=>x.bye ? `<li><b>${esc(x.bye)}</b> gets a bye</li>`
-    : `<li><b>${esc(x.winner)}</b> beat ${esc(x.winner===x.a?x.b:x.a)}<small>${esc(song(x.song).title)}</small></li>`).join("");
+    : `<li><b>${esc(x.winner)}</b> beat ${namesOf(x).filter(n=>n!==x.winner).map(esc).join(" & ")}<small>${esc(song(x.song).title)}</small></li>`).join("");
   let html = T.past.map(p=>`<h4>${esc(p.label)}</h4><ul>${rows(p.results)}</ul>`).join("");
   if(T.results.length) html += `<h4>${esc(T.label)}</h4><ul>${rows(T.results)}</ul>`;
   if(T.phase!=="champion" && T.pool.length) html += `<p class="count">Still to battle in the ${esc(T.label.toLowerCase())}: ${T.pool.map(esc).join(", ")}</p>`;
@@ -593,14 +595,14 @@ function renderTourney(){
   if(T.phase==="champion"){
     $("upLabel").textContent="Your champion";
     $("vsRow").classList.remove("rolling");
-    $("nameA").textContent=T.champion||"—"; $("vsEm").hidden=true; $("nameB").textContent="";
+    $("vsRow").innerHTML=`<span>${esc(T.champion||"—")}</span>`;
     $("songTitle").textContent="Lip sync legend"; $("songArtist").textContent=""; $("songSub").textContent="";
     setControls([{label:"New tournament",act:"toSetup",big:1}]);
     return;
   }
-  $("vsEm").hidden=false;
   $("vsRow").classList.toggle("rolling",!!rolling);
-  if(!rolling){ $("nameA").textContent=c.a; $("nameB").textContent=c.b; }
+  if(!rolling || $("vsRow").children.length!==c.names.length*2-1)
+    $("vsRow").innerHTML = c.names.map(n=>`<span>${esc(n)}</span>`).join("<em>vs</em>");
   if(rolling){
     $("upLabel").textContent=`${T.label} · Drawing names`;
     $("songTitle").textContent="…"; $("songArtist").textContent=""; $("songSub").textContent="";
@@ -612,7 +614,7 @@ function renderTourney(){
   if(T.phase==="judge"){
     $("upLabel").textContent="Who won?";
     $("songSub").textContent="";
-    setControls([{label:c.a,act:"winA",big:1,kbd:"1"},{label:c.b,act:"winB",big:1,kbd:"2"},{label:"Replay clip",act:"replay"}]);
+    setControls([...c.names.map((n,i)=>({label:n,act:"win"+i,big:1,kbd:String(i+1)})),{label:"Replay clip",act:"replay"}]);
     return;
   }
   if(playing){
@@ -682,7 +684,7 @@ const ACT = {
   main, back, next, swap, redraw,
   endclip: finish,
   replay: ()=>{ T.phase="up"; main(); },
-  winA: ()=>win(T.cur.a), winB: ()=>win(T.cur.b),
+  win0: ()=>win(T.cur.names[0]), win1: ()=>win(T.cur.names[1]), win2: ()=>win(T.cur.names[2]),
   toSetup: ()=>setTab("setup"),
 };
 $("controls").addEventListener("click",e=>{ const b=e.target.closest("button[data-act]"); if(b && !b.disabled) ACT[b.dataset.act]?.(); });
@@ -737,8 +739,7 @@ $("copyBtn").onclick=async()=>{
 document.addEventListener("keydown",e=>{
   if($("show").hidden || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if(e.code==="Space"){ e.preventDefault(); if(e.target.closest && e.target.closest("button")) e.target.blur(); main(); }
-  else if(T && T.phase==="judge" && e.key==="1") win(T.cur.a);
-  else if(T && T.phase==="judge" && e.key==="2") win(T.cur.b);
+  else if(T && T.phase==="judge" && /^[1-3]$/.test(e.key) && T.cur.names[+e.key-1]) win(T.cur.names[+e.key-1]);
   else if(!T && e.key==="ArrowRight") next();
   else if(!T && e.key==="ArrowLeft") back();
 });
