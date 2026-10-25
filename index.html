@@ -110,6 +110,28 @@ body{display:flex;flex-direction:column}
 main{flex:1;display:flex;flex-direction:column}
 body.mode-show.hide-video #show{flex:1;align-content:center;padding-block:24px 64px}
 body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;border:0;margin:0}
+
+/* ---------- Tournament ---------- */
+.vs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:.05em .4em;font:800 clamp(36px,7.5vw,80px)/1.05 var(--f-display);letter-spacing:-.01em;text-wrap:balance}
+.vs em{font:400 .42em var(--f-mark);color:var(--hot);font-style:normal}
+.vs.rolling span{color:var(--muted)}
+#show.tourney .card h2{font-size:clamp(22px,3.6vw,38px);color:var(--bulb);margin-top:8px}
+#show.tourney .card .artist{font-size:clamp(15px,2vw,19px)}
+.results{width:min(900px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.results summary{cursor:pointer;font-weight:600}
+.results h4{margin:14px 0 4px;font:600 11px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--bulb)}
+.results ul{margin:0;padding-left:18px;display:grid;gap:2px}
+.results small{color:var(--muted);margin-left:6px}
+.results p{margin:8px 0 0}
+#playersBox{margin-bottom:20px}
+#playerList{width:100%;min-height:150px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;resize:vertical}
+#rigBox summary{cursor:pointer;font-weight:600}
+#rigBox p{margin:8px 0}
+#rigList{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr))}
+.rigrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px;align-items:center}
+.rigrow span{overflow-wrap:anywhere}
+.rigrow select{min-width:0;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--fg);font:inherit;font-size:13px}
+.btn.danger{color:var(--bad)}
 </style>
 </head>
 <body class="mode-setup">
@@ -124,6 +146,22 @@ body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opa
 
 <main>
 <section id="setup" class="wrap">
+  <div class="keybox" id="playersBox">
+    <h2>Players</h2>
+    <p>One name per line. Each battle draws two people who haven't gone yet this round, and you pick the winner. Winners move on until there's a champion.</p>
+    <textarea id="playerList" placeholder="Alex&#10;Jordan&#10;Sam"></textarea>
+    <div class="keyrow">
+      <button class="btn primary" id="startT">Start tournament</button>
+      <button class="btn danger" id="endT" hidden>End tournament</button>
+      <span id="pCount" class="count"></span>
+    </div>
+    <div id="tStatus" class="count"></div>
+    <details id="rigBox">
+      <summary>Secret song picks</summary>
+      <p>Give someone a song and it plays the first time they battle. It looks like a normal random pick on the Show screen.</p>
+      <div id="rigList"></div>
+    </details>
+  </div>
   <div class="keybox">
     <h2>Find the videos</h2>
     <p>Paste a YouTube Data API key and hit Find. It looks for the “Topic” audio upload of each song, checks the length against Spotify, and flags anything that needs a look. The key is saved only in this browser.</p>
@@ -153,22 +191,21 @@ body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opa
 <section id="show" class="wrap" hidden>
   <div class="marquee"><div class="card">
     <div class="eyebrow" id="upLabel">Up next</div>
+    <div class="vs" id="vsRow" hidden><span id="nameA"></span><em id="vsEm">vs</em><span id="nameB"></span></div>
     <h2 id="songTitle">—</h2>
     <div class="artist" id="songArtist"></div>
     <div class="sub" id="songSub"></div>
     <div class="bar" id="barWrap" style="visibility:hidden"><i id="bar"></i></div>
-    <div class="controls">
-      <button class="btn" id="backBtn">◀ Back</button>
-      <button class="btn primary big" id="mainBtn">Start<span class="kbd">space</span></button>
-      <button class="btn" id="nextBtn">Next ▶</button>
-    </div>
+    <div class="controls" id="controls"></div>
   </div></div>
   <div class="note" id="showNote" aria-live="polite"></div>
   <div class="subcontrols">
+    <button class="btn sm" id="undoBtn" hidden>Undo</button>
     <button class="btn sm" id="shuffleBtn">Reshuffle</button>
     <button class="btn sm" id="vidBtn">Hide video</button>
     <button class="btn sm" id="fsBtn">Fullscreen</button>
   </div>
+  <details class="results" id="resultsBox" hidden><summary>Bracket so far</summary><div id="results"></div></details>
 </section>
 
 <div id="playerWrap"><div id="yt"></div></div>
@@ -407,7 +444,8 @@ window.onYouTubeIframeAPIReady = () => {
       onError:e=>{
         const n = cur && cur.n;
         if(n && [100,101,150].includes(e.data)){ resolved[n]={...resolved[n],status:"blocked",note:"YouTube blocked playback here; paste another link."}; save(); updateRow(song(n)); updateCount(); }
-        if(mode==="play"){ $("showNote").textContent=`“${cur.title}” wouldn't play, so it was skipped.`; finish(); }
+        if(mode==="play" && T && T.phase==="playing"){ const t=cur.title; stop(); T.phase="up"; swap(); $("showNote").textContent=`“${t}” wouldn't play, so a new song was drawn.`; }
+        else if(mode==="play"){ $("showNote").textContent=`“${cur.title}” wouldn't play, so it was skipped.`; finish(); }
         else mode=null;
       }
     }
@@ -442,7 +480,87 @@ function preview(s){
   mode="preview"; load(s);
 }
 
-// ---- show ----
+// ---- tournament state ----
+let playersText = LS.get("lsc.players","");
+let rigs = LS.get("lsc.rigs",{});              // player name -> song number
+let T = LS.get("lsc.T",null), Th = LS.get("lsc.Th",[]);
+if(T && T.phase==="playing") T.phase="up";
+const getPlayers = () => [...new Set(playersText.split("\n").map(s=>s.trim()).filter(Boolean))];
+const saveT = () => { LS.set("lsc.T",T); LS.set("lsc.Th",Th); };
+const snap = () => { Th.push(JSON.stringify(T)); if(Th.length>40) Th.shift(); };
+const rand = a => a[Math.floor(Math.random()*a.length)];
+const roundName = n => n===2?"Final":n===4?"Semifinals":n===8?"Quarterfinals":`Round of ${n}`;
+const battlesDone = () => T.results.filter(r=>!r.bye).length;
+const battlesTotal = () => Math.floor(T.alive.length/2);
+let rolling = null;
+
+function startTournament(){
+  const ps = getPlayers();
+  if(ps.length<2){ $("tStatus").textContent="Add at least two players."; return; }
+  stop();
+  T = {label:roundName(ps.length), alive:ps.slice(), pool:ps.slice(), winners:[], results:[], past:[], used:[], cur:null, phase:"up", champion:null};
+  Th = [];
+  drawMatch(); saveT(); renderPlayers(); setTab("show"); reveal();
+}
+function drawMatch(){
+  T.cur = null;
+  for(;;){
+    if(T.pool.length>=2){
+      const a=rand(T.pool); T.pool.splice(T.pool.indexOf(a),1);
+      const b=rand(T.pool); T.pool.splice(T.pool.indexOf(b),1);
+      const s=pickSong([a,b]); T.used.push(s);
+      T.cur={a,b,song:s}; T.phase="up"; return;
+    }
+    if(T.pool.length===1){ const x=T.pool.pop(); T.winners.push(x); T.results.push({bye:x}); continue; }
+    if(T.winners.length<=1){ T.champion=T.winners[0]||null; T.phase="champion"; return; }
+    T.past.push({label:T.label, results:T.results});
+    T.alive=T.winners; T.winners=[]; T.results=[]; T.pool=T.alive.slice(); T.label=roundName(T.alive.length);
+  }
+}
+function pickSong(names){
+  const ok = n => vidOf(n) && !T.used.includes(n);
+  const rigged = names.map(x=>rigs[x]).filter(n=>n && ok(n));
+  if(rigged.length) return rand(rigged);
+  const stillIn = new Set([...T.pool, ...T.winners]);
+  const reserved = new Set(Object.entries(rigs).filter(([p])=>stillIn.has(p)).map(([,n])=>n));
+  let c = playable().filter(n=>ok(n) && !reserved.has(n));
+  if(!c.length) c = playable().filter(n=>ok(n));
+  if(!c.length) c = playable();                 // every song used: allow repeats
+  return rand(c);
+}
+function swap(){
+  if(!T || !T.cur || T.phase!=="up") return;
+  snap(); T.cur.song = pickSong([T.cur.a,T.cur.b]); T.used.push(T.cur.song); saveT(); renderShow();
+}
+function redraw(){
+  if(!T || !T.cur || T.phase!=="up") return;
+  snap(); T.pool.push(T.cur.a,T.cur.b); T.used = T.used.filter(n=>n!==T.cur.song);
+  drawMatch(); saveT(); reveal();
+}
+function win(x){
+  if(!T || T.phase!=="judge") return;
+  snap(); T.results.push({a:T.cur.a,b:T.cur.b,winner:x,song:T.cur.song}); T.winners.push(x);
+  drawMatch(); saveT(); $("showNote").textContent="";
+  if(T.phase==="champion") renderShow(); else reveal();
+}
+function undo(){
+  if(!T || !Th.length) return;
+  clearInterval(rolling); rolling=null; stop();
+  T = JSON.parse(Th.pop()); if(T.phase==="playing") T.phase="up";
+  saveT(); renderShow(); renderPlayers();
+}
+function reveal(){
+  clearInterval(rolling); rolling=null;
+  if(!T || !T.cur || matchMedia("(prefers-reduced-motion: reduce)").matches){ renderShow(); return; }
+  const names = T.alive.length>1 ? T.alive : getPlayers(), t0 = Date.now();
+  rolling = setInterval(()=>{
+    if(Date.now()-t0>1200){ clearInterval(rolling); rolling=null; renderShow(); return; }
+    $("nameA").textContent=rand(names); $("nameB").textContent=rand(names);
+  },80);
+  renderShow();
+}
+
+// ---- free play (no tournament) ----
 function shuffle(){
   order = playable();
   for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
@@ -452,31 +570,95 @@ function curShowSong(){
   while(pos<order.length && !vidOf(order[pos])) pos++;
   return pos<order.length ? song(order[pos]) : null;
 }
-function renderShow(){
-  const s = curShowSong(), playing = mode==="play";
-  $("barWrap").style.visibility = playing ? "visible" : "hidden";
-  $("backBtn").disabled = !order.length;
-  $("nextBtn").disabled = !s;
-  if(!order.length){
-    $("upLabel").textContent="Nothing queued";
-    $("songTitle").textContent="No songs ready";
-    $("songArtist").textContent="Find videos in Setup, then hit Reshuffle.";
-    $("songSub").textContent=""; $("mainBtn").disabled=true; return;
-  }
-  if(!s){
-    $("upLabel").textContent="That's a wrap";
-    $("songTitle").textContent="All songs played";
-    $("songArtist").textContent="Reshuffle to go again.";
-    $("songSub").textContent=""; $("mainBtn").disabled=true; return;
-  }
-  $("mainBtn").disabled=false;
-  $("upLabel").textContent = playing ? (paused?"Paused":"Now playing") : `Up next · song ${pos+1} of ${order.length}`;
-  $("songTitle").textContent = s.title;
-  $("songArtist").textContent = s.artist;
-  if(!playing){ $("songSub").textContent = `${fmt(s.end-s.start)} clip`; $("bar").style.width="0"; }
-  $("mainBtn").innerHTML = (playing ? (paused?"Resume":"Pause") : "Start") + '<span class="kbd">space</span>';
+
+// ---- show rendering ----
+function setControls(list){
+  $("controls").innerHTML = list.map(b=>`<button class="btn${b.big?" primary big":""}" data-act="${b.act}"${b.dis?" disabled":""}>${esc(b.label)}${b.kbd?`<span class="kbd">${b.kbd}</span>`:""}</button>`).join("");
 }
+function mainLabel(){ return mode==="play" ? (paused?"Resume":"Pause") : "Start"; }
+function renderResults(){
+  if(!T){ $("resultsBox").hidden=true; return; }
+  $("resultsBox").hidden=false;
+  const rows = r => r.map(x=>x.bye ? `<li><b>${esc(x.bye)}</b> gets a bye</li>`
+    : `<li><b>${esc(x.winner)}</b> beat ${esc(x.winner===x.a?x.b:x.a)}<small>${esc(song(x.song).title)}</small></li>`).join("");
+  let html = T.past.map(p=>`<h4>${esc(p.label)}</h4><ul>${rows(p.results)}</ul>`).join("");
+  if(T.results.length) html += `<h4>${esc(T.label)}</h4><ul>${rows(T.results)}</ul>`;
+  if(T.phase!=="champion" && T.pool.length) html += `<p class="count">Still to battle in the ${esc(T.label.toLowerCase())}: ${T.pool.map(esc).join(", ")}</p>`;
+  $("results").innerHTML = html || `<p class="count">No battles finished yet.</p>`;
+}
+function renderTourney(){
+  const playing = mode==="play", c=T.cur;
+  $("vsRow").hidden=false;
+  $("barWrap").style.visibility = playing ? "visible" : "hidden";
+  if(T.phase==="champion"){
+    $("upLabel").textContent="Your champion";
+    $("vsRow").classList.remove("rolling");
+    $("nameA").textContent=T.champion||"—"; $("vsEm").hidden=true; $("nameB").textContent="";
+    $("songTitle").textContent="Lip sync legend"; $("songArtist").textContent=""; $("songSub").textContent="";
+    setControls([{label:"New tournament",act:"toSetup",big:1}]);
+    return;
+  }
+  $("vsEm").hidden=false;
+  $("vsRow").classList.toggle("rolling",!!rolling);
+  if(!rolling){ $("nameA").textContent=c.a; $("nameB").textContent=c.b; }
+  if(rolling){
+    $("upLabel").textContent=`${T.label} · Drawing names`;
+    $("songTitle").textContent="…"; $("songArtist").textContent=""; $("songSub").textContent="";
+    setControls([{label:"Redraw names",act:"redraw",dis:1},{label:"Start",act:"main",big:1,kbd:"space",dis:1},{label:"Swap song",act:"swap",dis:1}]);
+    return;
+  }
+  const s=song(c.song);
+  $("songTitle").textContent=s.title; $("songArtist").textContent=s.artist;
+  if(T.phase==="judge"){
+    $("upLabel").textContent="Who won?";
+    $("songSub").textContent="";
+    setControls([{label:c.a,act:"winA",big:1,kbd:"1"},{label:c.b,act:"winB",big:1,kbd:"2"},{label:"Replay clip",act:"replay"}]);
+    return;
+  }
+  if(playing){
+    $("upLabel").textContent = paused ? "Paused" : "Now playing";
+    setControls([{label:"Restart",act:"back"},{label:mainLabel(),act:"main",big:1,kbd:"space"},{label:"End clip",act:"endclip"}]);
+    return;
+  }
+  $("upLabel").textContent=`${T.label} · Battle ${battlesDone()+1} of ${battlesTotal()}`;
+  $("songSub").textContent=`${fmt(s.end-s.start)} clip`; $("bar").style.width="0";
+  setControls([{label:"Redraw names",act:"redraw"},{label:"Start",act:"main",big:1,kbd:"space"},{label:"Swap song",act:"swap"}]);
+}
+function renderShow(){
+  $("show").classList.toggle("tourney",!!T);
+  $("shuffleBtn").hidden=!!T;
+  $("undoBtn").hidden=!(T && Th.length);
+  renderResults();
+  if(T) return renderTourney();
+  $("vsRow").hidden=true;
+  const s=curShowSong(), playing=mode==="play";
+  $("barWrap").style.visibility = playing ? "visible" : "hidden";
+  if(!order.length || !s){
+    $("upLabel").textContent = order.length ? "That's a wrap" : "Nothing queued";
+    $("songTitle").textContent = order.length ? "All songs played" : "No songs ready";
+    $("songArtist").textContent = order.length ? "Reshuffle to go again." : "Find videos in Setup, then hit Reshuffle.";
+    $("songSub").textContent="";
+    setControls([{label:"◀ Back",act:"back",dis:!order.length},{label:"Start",act:"main",big:1,kbd:"space",dis:1},{label:"Next ▶",act:"next",dis:1}]);
+    return;
+  }
+  $("upLabel").textContent = playing ? (paused?"Paused":"Now playing") : `Up next · song ${pos+1} of ${order.length}`;
+  $("songTitle").textContent=s.title; $("songArtist").textContent=s.artist;
+  if(!playing){ $("songSub").textContent=`${fmt(s.end-s.start)} clip`; $("bar").style.width="0"; }
+  setControls([{label:"◀ Back",act:"back"},{label:mainLabel(),act:"main",big:1,kbd:"space"},{label:"Next ▶",act:"next"}]);
+}
+
+// ---- show actions ----
 function main(){
+  if(rolling) return;
+  if(T){
+    if(T.phase!=="up" && T.phase!=="playing") return;
+    if(mode!=="play"){
+      if(!ready){ $("showNote").textContent="The player is still loading. Try again in a second."; return; }
+      $("showNote").textContent=""; mode="play"; T.phase="playing"; saveT(); load(song(T.cur.song));
+    } else if(paused){ player.playVideo(); paused=false; }
+    else { player.pauseVideo(); paused=true; }
+    renderShow(); return;
+  }
   const s=curShowSong(); if(!s) return;
   if(mode!=="play"){
     if(!ready){ $("showNote").textContent="The player is still loading. Try again in a second."; return; }
@@ -485,13 +667,53 @@ function main(){
   else { player.pauseVideo(); paused=true; }
   renderShow();
 }
-function finish(){ stop(); pos++; save(); renderShow(); }
+function finish(){
+  stop();
+  if(T){ if(T.phase==="playing"){ T.phase="judge"; saveT(); } renderShow(); return; }
+  pos++; save(); renderShow();
+}
 function back(){
-  if(mode==="play"){ stop(); }        // restart this song from the Up next screen
-  else { pos=Math.max(0,pos-1); }
+  if(T){ if(mode==="play"){ stop(); T.phase="up"; saveT(); } renderShow(); return; }
+  if(mode==="play") stop(); else pos=Math.max(0,pos-1);
   save(); renderShow();
 }
-function next(){ stop(); if(pos<order.length) pos++; save(); renderShow(); }
+function next(){ if(T) return; stop(); if(pos<order.length) pos++; save(); renderShow(); }
+const ACT = {
+  main, back, next, swap, redraw,
+  endclip: finish,
+  replay: ()=>{ T.phase="up"; main(); },
+  winA: ()=>win(T.cur.a), winB: ()=>win(T.cur.b),
+  toSetup: ()=>setTab("setup"),
+};
+$("controls").addEventListener("click",e=>{ const b=e.target.closest("button[data-act]"); if(b && !b.disabled) ACT[b.dataset.act]?.(); });
+
+// ---- setup: players & secret picks ----
+function arm(btn,label,armedLabel,fn){
+  if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent=label; fn(); return; }
+  btn.dataset.armed="1"; btn.textContent=armedLabel;
+  setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent=label; } },4000);
+}
+function renderPlayers(){
+  const ps=getPlayers();
+  $("pCount").textContent = ps.length ? `${ps.length} player${ps.length===1?"":"s"}` : "";
+  if(!$("startT").dataset.armed) $("startT").textContent = T ? "Restart tournament" : "Start tournament";
+  $("endT").hidden = !T;
+  $("tStatus").textContent = !T ? "" : T.phase==="champion" ? `Finished. Champion: ${T.champion}.`
+    : `In progress: ${T.label}, ${battlesDone()} of ${battlesTotal()} battles done. Name changes here apply to the next tournament.`;
+  const opts = `<option value="">Random</option>` + SONGS.filter(s=>vidOf(s.n)).map(s=>`<option value="${s.n}">${esc(s.title)} · ${esc(s.artist)}</option>`).join("");
+  $("rigList").innerHTML = ps.length
+    ? ps.map((p,i)=>`<label class="rigrow" for="rig${i}"><span>${esc(p)}</span><select id="rig${i}" data-p="${esc(p)}">${opts}</select></label>`).join("")
+    : `<p class="count">Add players above first.</p>`;
+  $("rigList").querySelectorAll("select").forEach(sel=>{
+    sel.value = rigs[sel.dataset.p] ? String(rigs[sel.dataset.p]) : "";
+    sel.onchange = ()=>{ if(sel.value) rigs[sel.dataset.p]=+sel.value; else delete rigs[sel.dataset.p]; LS.set("lsc.rigs",rigs); };
+  });
+}
+$("playerList").value = playersText;
+$("playerList").addEventListener("input",e=>{ playersText=e.target.value; LS.set("lsc.players",playersText); renderPlayers(); });
+$("startT").onclick=e=>{ if(T) arm(e.currentTarget,"Restart tournament","Click again to restart",startTournament); else startTournament(); };
+$("endT").onclick=e=>arm(e.currentTarget,"End tournament","Click again to end it",()=>{ stop(); T=null; Th=[]; saveT(); renderPlayers(); renderShow(); });
+$("undoBtn").onclick=undo;
 
 // ---- tabs & wiring ----
 function setTab(t){
@@ -499,13 +721,13 @@ function setTab(t){
   document.body.classList.remove("mode-setup","mode-show"); document.body.classList.add("mode-"+t); LS.set("lsc.tab",t);
   $("setup").hidden = t!=="setup"; $("show").hidden = t!=="show";
   $("tabSetup").setAttribute("aria-selected",t==="setup"); $("tabShow").setAttribute("aria-selected",t==="show");
-  if(t==="show"){ if(!order.length) shuffle(); renderShow(); }
+  if(t==="show"){ if(!T && !order.length) shuffle(); renderShow(); }
+  else renderPlayers();
 }
 $("tabSetup").onclick=()=>setTab("setup");
 $("tabShow").onclick=()=>setTab("show");
 $("findBtn").onclick=()=>findAll(false);
 $("redoBtn").onclick=()=>findAll(true);
-$("mainBtn").onclick=main; $("backBtn").onclick=back; $("nextBtn").onclick=next;
 $("shuffleBtn").onclick=()=>{ stop(); shuffle(); $("showNote").textContent=`Shuffled ${order.length} songs.`; renderShow(); };
 $("fsBtn").onclick=()=>{ const el=document.documentElement; (document.fullscreenElement?document.exitFullscreen():el.requestFullscreen?.())?.catch?.(()=>{}); };
 $("copyBtn").onclick=async()=>{
@@ -513,16 +735,18 @@ $("copyBtn").onclick=async()=>{
   catch(e){ $("exportBox").select(); $("copyMsg").textContent="Selected. Press Ctrl/Cmd+C"; }
 };
 document.addEventListener("keydown",e=>{
-  if($("show").hidden || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-  if(e.code==="Space"){ e.preventDefault(); main(); }
-  else if(e.key==="ArrowRight") next();
-  else if(e.key==="ArrowLeft") back();
+  if($("show").hidden || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if(e.code==="Space"){ e.preventDefault(); if(e.target.closest && e.target.closest("button")) e.target.blur(); main(); }
+  else if(T && T.phase==="judge" && e.key==="1") win(T.cur.a);
+  else if(T && T.phase==="judge" && e.key==="2") win(T.cur.b);
+  else if(!T && e.key==="ArrowRight") next();
+  else if(!T && e.key==="ArrowLeft") back();
 });
 
 function setVideo(hide){ document.body.classList.toggle("hide-video",hide); $("vidBtn").textContent = hide?"Show video":"Hide video"; LS.set("lsc.hideVideo",hide); }
 $("vidBtn").onclick=()=>setVideo(!document.body.classList.contains("hide-video"));
 $("apikey").value = apiKey;
-renderRows(); updateCount();
+renderRows(); updateCount(); renderPlayers();
 setVideo(LS.get("lsc.hideVideo",false));
 setTab(LS.get("lsc.tab", playable().length===SONGS.length ? "show" : "setup"));
 </script>
