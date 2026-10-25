@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lip Sync Showdown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Monoton&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a stage. Setup is a backstage cue sheet; Show is one big "up next" marquee card with the player under it. */
+:root{
+  --bg:#150e1b; --panel:#20162a; --panel-2:#2a1e36; --line:#3b2d47;
+  --fg:#f7eff8; --muted:#b4a2bd; --hot:#ff4fa3; --bulb:#ffc857;
+  --ok:#5ee0a0; --warn:#ffc857; --bad:#ff6b6b;
+  --f-mark:"Monoton","Bricolage Grotesque",system-ui,sans-serif;
+  --f-display:"Bricolage Grotesque",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:15px/1.5 var(--f-body);min-height:100vh}
+button,input{font:inherit;color:inherit}
+a{color:var(--hot)}
+:focus-visible{outline:2px solid var(--bulb);outline-offset:2px}
+.wrap{width:100%;max-width:1100px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+
+header.top{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1d1326,var(--bg))}
+header.top .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding-block:14px}
+.mark{font-family:var(--f-mark);font-size:clamp(22px,4vw,34px);font-weight:400;letter-spacing:.02em;margin:0;color:var(--hot);line-height:1}
+.mark span{color:var(--bulb)}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;margin-left:auto}
+.tabs button{border:0;background:transparent;padding:6px 16px;border-radius:999px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--hot);color:#1a0a14}
+.count{font:500 12px var(--f-mono);color:var(--muted);letter-spacing:.04em}
+
+.btn{border:1px solid var(--line);background:var(--panel-2);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--hot);border-color:var(--hot);color:#1a0a14}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+.kbd{font:500 11px var(--f-mono);border:1px solid currentColor;border-radius:4px;padding:0 5px;margin-left:6px;opacity:.7}
+
+/* ---------- Setup ---------- */
+#setup{padding-block:24px 240px}
+.keybox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px}
+.keybox h2{margin:0;font:800 18px var(--f-display)}
+.keybox p{margin:0;color:var(--muted);max-width:70ch}
+.keyrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.keyrow input{flex:1 1 260px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+#findStatus{font-size:13px;color:var(--muted)}
+#findStatus.err{color:var(--bad)}
+.tblwrap{overflow-x:auto;margin-top:20px;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:860px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:600 11px var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+td.n{font:500 12px var(--f-mono);color:var(--muted);width:36px}
+.song b{display:block;font-weight:600}
+.song small{color:var(--muted)}
+.clip{font:500 13px var(--f-mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+.vid{font-size:13px;min-width:0}
+.vid a{text-decoration:none}
+.vid .meta{display:block;color:var(--muted);font:500 12px var(--f-mono)}
+.chip{display:inline-block;font:600 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid}
+.chip.ok{color:var(--ok);border-color:var(--ok)}
+.chip.manual{color:var(--ok);border-color:var(--ok)}
+.chip.check{color:var(--warn);border-color:var(--warn)}
+.chip.missing,.chip.blocked{color:var(--bad);border-color:var(--bad)}
+.chip.none{color:var(--muted);border-color:var(--line)}
+td input.paste{width:150px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px}
+.export{margin-top:20px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:10px}
+.export h3{margin:0;font:800 16px var(--f-display)}
+.export p{margin:0;color:var(--muted);font-size:14px}
+.export textarea{width:100%;min-height:70px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:500 12px var(--f-mono);resize:vertical}
+
+/* ---------- Show ---------- */
+#show{padding-block:28px 40px;display:grid;gap:20px;justify-items:center}
+.marquee{
+  width:min(900px,100%);border-radius:24px;padding:10px;
+  border:9px dotted var(--bulb);background:var(--panel-2);
+  animation:twinkle 1.2s steps(2) infinite;
+}
+@keyframes twinkle{50%{border-color:#ffe7a8}}
+@media (prefers-reduced-motion:reduce){.marquee{animation:none}}
+.card{position:relative;z-index:1;background:var(--bg);border-radius:12px;padding:clamp(20px,5vw,44px);display:grid;gap:10px;text-align:center}
+.eyebrow{font:600 12px var(--f-body);letter-spacing:.2em;text-transform:uppercase;color:var(--bulb)}
+.card h2{margin:0;font:800 clamp(32px,7vw,72px)/1.02 var(--f-display);text-wrap:balance;letter-spacing:-.01em}
+.card .artist{font-size:clamp(16px,2.4vw,22px);color:var(--muted)}
+.card .sub{font:500 13px var(--f-mono);color:var(--muted)}
+.bar{height:8px;background:var(--panel-2);border-radius:999px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--hot),var(--bulb))}
+.controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
+.controls .big{font:800 20px var(--f-display);padding:12px 32px;border-radius:14px}
+.note{min-height:1.5em;color:var(--warn);font-size:14px;text-align:center}
+.subcontrols{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+/* Player: one iframe for both views (moving it would reload it) */
+#playerWrap{aspect-ratio:16/9;max-width:100%;background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+#playerWrap iframe,#yt{width:100%;height:100%;display:block}
+body.mode-show #playerWrap{width:min(560px,100%);margin:0 auto 40px}
+body.mode-setup #playerWrap{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;width:min(320px,calc(100vw - 32px));z-index:20;box-shadow:0 10px 30px #0009}
+body.mode-setup #playerWrap::before{content:"Preview";position:absolute;margin:6px;padding:1px 8px;border-radius:999px;background:var(--hot);color:#1a0a14;font:600 11px var(--f-body);z-index:2}
+body.mode-setup #playerWrap{position:fixed}
+body{display:flex;flex-direction:column}
+main{flex:1;display:flex;flex-direction:column}
+body.mode-show.hide-video #show{flex:1;align-content:center;padding-block:24px 64px}
+body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;border:0;margin:0}
+</style>
+</head>
+<body class="mode-setup">
+<header class="top"><div class="wrap">
+  <h1 class="mark">Lip <span>Sync</span></h1>
+  <span class="count" id="count"></span>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabSetup" aria-selected="true">Setup</button>
+    <button role="tab" id="tabShow" aria-selected="false">Show</button>
+  </nav>
+</div></header>
+
+<main>
+<section id="setup" class="wrap">
+  <div class="keybox">
+    <h2>Find the videos</h2>
+    <p>Paste a YouTube Data API key and hit Find. It looks for the “Topic” audio upload of each song, checks the length against Spotify, and flags anything that needs a look. The key is saved only in this browser.</p>
+    <div class="keyrow">
+      <input id="apikey" type="password" placeholder="YouTube Data API v3 key" autocomplete="off">
+      <button class="btn primary" id="findBtn">Find videos</button>
+      <button class="btn sm" id="redoBtn" title="Re-run every automatic match (keeps links you pasted)">Redo automatic matches</button>
+    </div>
+    <div id="findStatus" aria-live="polite"></div>
+  </div>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>#</th><th>Song</th><th>Clip</th><th>Video</th><th>Status</th><th>Paste a link instead</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="export">
+    <h3>Save the matches</h3>
+    <p>Once everything looks right, copy this and send it to Claude to bake the videos into the file. Then it works on any computer without the API key.</p>
+    <textarea id="exportBox" readonly></textarea>
+    <div><button class="btn sm" id="copyBtn">Copy</button> <span id="copyMsg" class="count"></span></div>
+  </div>
+</section>
+
+<section id="show" class="wrap" hidden>
+  <div class="marquee"><div class="card">
+    <div class="eyebrow" id="upLabel">Up next</div>
+    <h2 id="songTitle">—</h2>
+    <div class="artist" id="songArtist"></div>
+    <div class="sub" id="songSub"></div>
+    <div class="bar" id="barWrap" hidden><i id="bar"></i></div>
+    <div class="controls">
+      <button class="btn" id="backBtn">◀ Back</button>
+      <button class="btn primary big" id="mainBtn">Start<span class="kbd">space</span></button>
+      <button class="btn" id="nextBtn">Next ▶</button>
+    </div>
+  </div></div>
+  <div class="note" id="showNote" aria-live="polite"></div>
+  <div class="subcontrols">
+    <button class="btn sm" id="shuffleBtn">Reshuffle</button>
+    <button class="btn sm" id="vidBtn">Hide video</button>
+    <button class="btn sm" id="fsBtn">Fullscreen</button>
+  </div>
+</section>
+
+<div id="playerWrap"><div id="yt"></div></div>
+</main>
+
+<script>
+// ---- Songs: start/end in seconds; len = Spotify length (for matching), null if unknown ----
+const SONGS = [
+  [1,"I Will Survive","Gloria Gaynor",0,87,296],
+  [2,"thank u, next","Ariana Grande",0,60.5,207],
+  [3,"Bad Romance","Lady Gaga",0,105,295],
+  [4,"Mamma Mia","ABBA",0,80,213],
+  [5,"Genie In a Bottle","Christina Aguilera",0,80,218],
+  [6,"Disturbia","Rihanna",0,79,239],
+  [7,"Take It Off","Kesha",0,77,215],
+  [8,"Super Graphic Ultra Modern Girl","Chappell Roan",0,68,184],
+  [9,"good 4 u","Olivia Rodrigo",0,57,178],
+  [10,"Abracadabra","Lady Gaga",0,93,223],
+  [11,"Hot N Cold","Katy Perry",0,62,220],
+  [12,"Potential Breakup Song","Aly & AJ",0,85,220],
+  [13,"Look What You Made Me Do","Taylor Swift",0,76,212],
+  [14,"Maneater","Nelly Furtado",0,73.5,259],
+  [15,"Bring Me To Life","Evanescence",0,74,236],
+  [16,"Let Me Blow Ya Mind","Eve, Gwen Stefani",0,76.3,230],
+  [17,"Breakin' Dishes","Rihanna",0,69,201],
+  [18,"Tears","Sabrina Carpenter",0,70.5,160],
+  [19,"Damaged","Danity Kane",0,68,244],
+  [20,"My Humps","Black Eyed Peas",0,85,327],
+  [21,"Since U Been Gone","Kelly Clarkson",0,64,189],
+  [22,"We Belong Together","Mariah Carey",0,89,null],
+  [23,"Don't Cha","The Pussycat Dolls, Busta Rhymes",79,139.9,null],
+  [24,"Fallin'","Alicia Keys",50,95,null],
+  [25,"Like A G6","Far East Movement, The Cataracs, DEV",68,129,null],
+  [26,"...Baby One More Time","Britney Spears",0,63,null],
+  [27,"Toxic","Britney Spears",0,84,null],
+  [28,"SexyBack","Justin Timberlake, Timbaland",0,81,null],
+  [29,"Gucci Gucci","Kreayshawn",0,74,null],
+  [30,"Untouched","The Veronicas",0,89,null],
+  [31,"Bleeding Love","Leona Lewis",0,94,null],
+  [32,"Shake It","Metro Station",0,65,null],
+  [33,"crushcrushcrush","Paramore",0,60,null],
+  [34,"Man! I Feel Like A Woman!","Shania Twain",0,86,null],
+  [35,"Before He Cheats","Carrie Underwood",0,69.6,null],
+].map(([n,title,artist,start,end,len])=>({n,title,artist,start,end,len}));
+
+// Baked-in video IDs (filled in after you send the export). Pasted/found matches override these.
+const BAKED = {"1":"RUQRsw3C-vg","2":"5OeR5XBEahU","3":"NlK9u6a69Dg","4":"MFKqiFG6HVs","5":"PzaTaIIIQy4","6":"3k95KCjTrYo","7":"RpFMuBHxGWs","8":"oH9I8QbjXHk","9":"aeDdS9aIpck","10":"lGHOHanjS-U","11":"LG558yBrNfk","12":"jJY-Gv0Ag9E","13":"zmhCkcZ_NA0","14":"YbNIM_Nbunk","15":"Yhwal9i1uyw","16":"2xA8bVghIJ8","17":"LO71pC20BDI","18":"ZIrJN3XyZns","19":"aFnveN2ADms","20":"WRNLZvnxioc","21":"E5Lt9MHuUNc","22":"uBSg9uADAf8","23":"wjMAT9y9ju4","24":"Urdlvw0SSEc","25":"w4s6H4ku6ZY","26":"fEfvTTJNeAY","27":"7l1A2gShWZo","28":"gfWQ1r6IQrY","29":"6WJFjXtHcy4","30":"EDS52OGoH1g","31":"CFJtRiKgLhE","32":"S2g6pYcE1Ic","33":"nQEduoil5GQ","34":"o9OUSh_ADJ0","35":"_4Z6JHlJyyo"};
+
+const FADE = 2;           // seconds of fade-out at the end of each clip
+const PREVIEW = 4;        // seconds of each end played by Preview
+
+// ---- helpers ----
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d }catch(e){ return d } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)) }catch(e){} }
+};
+const fmt = s => { s=Math.max(0,s); const w=Math.floor(s), f=Math.round((s-w)*10); return Math.floor(w/60)+":"+String(w%60).padStart(2,"0")+(f?"."+f:"") };
+const fmtR = s => fmt(Math.round(s));
+const iso = d => { const m=(d||"").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)||[]; return (+m[1]||0)*3600+(+m[2]||0)*60+(+m[3]||0) };
+const norm = s => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g,"");
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const parseLink = s => {
+  s=(s||"").trim(); if(!s) return null;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
+  if(m) return m[1];
+  return /^[A-Za-z0-9_-]{11}$/.test(s) ? s : null;
+};
+const song = n => SONGS[n-1];
+
+// ---- state ----
+let apiKey = LS.get("lsc.key","");
+let resolved = LS.get("lsc.resolved",{});   // n -> {id, channel, title, dur, status, manual}
+for(const [n,id] of Object.entries(BAKED)) if(!resolved[n]) resolved[n]={id,status:"ok",channel:"Saved",dur:null};
+let order = LS.get("lsc.order",[]), pos = LS.get("lsc.pos",0);
+let player=null, ready=false;
+let mode=null;            // "play" | "preview" | null
+let cur=null, curId=null, paused=false, phase=1;
+
+const vidOf = n => resolved[n] && resolved[n].status!=="blocked" && resolved[n].status!=="missing" ? resolved[n].id : null;
+const playable = () => SONGS.filter(s=>vidOf(s.n)).map(s=>s.n);
+const save = () => { LS.set("lsc.resolved",resolved); LS.set("lsc.order",order); LS.set("lsc.pos",pos); };
+
+// ---- setup table ----
+function renderRows(){
+  $("rows").innerHTML = SONGS.map(s=>`
+    <tr id="r${s.n}">
+      <td class="n">${s.n}</td>
+      <td class="song"><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></td>
+      <td class="clip">${fmt(s.start)}–${fmt(s.end)}</td>
+      <td class="vid" id="v${s.n}"></td>
+      <td id="st${s.n}"></td>
+      <td><input class="paste" id="p${s.n}" placeholder="youtu.be/…" aria-label="YouTube link for ${esc(s.title)}"></td>
+      <td style="white-space:nowrap"><button class="btn sm" id="pv${s.n}">Preview</button> <button class="btn sm" id="nm${s.n}" title="Swap to the next-best search result">Next match</button> <button class="btn sm" id="un${s.n}" title="Go back to the video before Next match">Undo</button></td>
+    </tr>`).join("");
+  SONGS.forEach(s=>{
+    $("p"+s.n).addEventListener("change",e=>onPaste(s,e.target.value));
+    $("pv"+s.n).addEventListener("click",()=>preview(s));
+    $("nm"+s.n).addEventListener("click",()=>nextMatch(s));
+    $("un"+s.n).addEventListener("click",()=>undoMatch(s));
+    updateRow(s);
+  });
+}
+function updateRow(s){
+  const r = resolved[s.n];
+  const labels={ok:"Matched",manual:"Your link",check:"Check this",missing:"Not found",blocked:"Won't embed"};
+  const st = r ? r.status : "none";
+  $("st"+s.n).innerHTML = `<span class="chip ${st}">${labels[st]||"Not searched"}</span>`;
+  if(r && r.id){
+    const lenNote = (r.dur && s.len) ? ` · Spotify ${fmt(s.len)}` : "";
+    $("v"+s.n).innerHTML = `<a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" rel="noopener">${esc(r.title||r.id)}</a>
+      <span class="meta">${esc(r.channel||"")}${r.dur?" · "+fmt(r.dur):""}${lenNote}</span>${r.note?`<span class="meta" style="color:var(--warn)">${esc(r.note)}</span>`:""}`;
+  } else $("v"+s.n).innerHTML = `<span class="meta">—</span>`;
+  $("pv"+s.n).disabled = !(r && r.id);
+  $("nm"+s.n).disabled = !(r && r.id);
+  $("un"+s.n).hidden = !(r && r.rejected && r.rejected.length);
+  if(r && r.manual && !$("p"+s.n).value) $("p"+s.n).value = "youtu.be/"+r.id;
+}
+function updateCount(){
+  const p = playable().length;
+  $("count").textContent = `${p}/${SONGS.length} ready`;
+  const out={}; SONGS.forEach(s=>{ const id=vidOf(s.n); if(id) out[s.n]=id; });
+  $("exportBox").value = JSON.stringify(out);
+}
+
+async function onPaste(s,val){
+  const id = parseLink(val);
+  if(!val.trim()){ if(resolved[s.n]&&resolved[s.n].manual){ delete resolved[s.n]; save(); updateRow(s); updateCount(); } return; }
+  if(!id){ $("findStatus").textContent=`Couldn't read a YouTube link for “${s.title}”.`; return; }
+  resolved[s.n]={id,manual:true,status:"manual",channel:"Pasted link",dur:null};
+  if(apiKey){
+    try{ const [d]=await details([id]); if(d){ Object.assign(resolved[s.n],{title:d.title,channel:d.channel,dur:d.dur}); if(!d.embeddable) resolved[s.n].status="blocked"; } }catch(e){}
+  }
+  save(); updateRow(s); updateCount();
+}
+
+// ---- YouTube Data API ----
+async function api(path){
+  if(location.protocol==="file:") throw new Error("This page is open as a file. Serve it from localhost (npx serve) and open it there.");
+  let r;
+  try{ r = await fetch(`https://www.googleapis.com/youtube/v3/${path}&key=${encodeURIComponent(apiKey)}`); }
+  catch(e){ throw new Error("The browser blocked the request to Google before it went out. Usually that's an ad or privacy blocker (uBlock, Brave Shields, Privacy Badger) or the page not being opened from localhost. Allow googleapis.com or turn the blocker off for localhost, then try again."); }
+  const j = await r.json();
+  if(j.error){
+    const reason = j.error.errors && j.error.errors[0] && j.error.errors[0].reason;
+    if(reason==="quotaExceeded") throw new Error("Daily API quota used up. It resets at midnight Pacific; paste links for the rest or try tomorrow.");
+    if(/key/i.test(reason||"")||j.error.code===400||j.error.code===403) throw new Error("The API key was rejected: "+j.error.message+" Check that YouTube Data API v3 is enabled for it and that any referrer restriction allows this page.");
+    throw new Error(j.error.message);
+  }
+  return j;
+}
+async function details(ids){
+  const j = await api(`videos?part=snippet,contentDetails,status&id=${ids.join(",")}`);
+  return (j.items||[]).map(v=>({id:v.id,title:v.snippet.title,channel:v.snippet.channelTitle,dur:iso(v.contentDetails.duration),embeddable:v.status.embeddable}));
+}
+function score(c,s){
+  if(!c.embeddable || c.dur < s.end+1) return -Infinity;
+  const t=c.title.toLowerCase(); let sc=0;
+  if(/ - topic$/i.test(c.channel)) sc+=100;
+  if(s.len){ const d=Math.abs(c.dur-s.len); if(d>2) sc-=Math.min(80,d*2); }
+  if(/\b(live|cover|karaoke|instrumental|remix|sped up|slowed|nightcore|8d|reaction|acapella|a cappella)\b/.test(t)) sc-=120;
+  if(/official (music )?video/.test(t)) sc-=25;
+  if(/lyric/.test(t)) sc-=10;
+  if(!norm(c.title).includes(norm(s.title).slice(0,10))) sc-=40;
+  return sc;
+}
+function pick(c,s){
+  const topic=/ - topic$/i.test(c.channel), lenOk = s.len==null || Math.abs(c.dur-s.len)<=3;
+  let note="";
+  if(!topic) note="Not the Topic upload, so timing may differ from Spotify.";
+  else if(!lenOk) note=`Length differs from Spotify by ${Math.abs(c.dur-s.len)}s.`;
+  return {id:c.id,title:c.title,channel:c.channel,dur:c.dur,status:(topic&&lenOk)?"ok":"check",note};
+}
+async function findOne(s, rejected=[]){
+  const q = encodeURIComponent(`${s.title} ${s.artist}`);
+  const j = await api(`search?part=snippet&type=video&videoEmbeddable=true&maxResults=12&q=${q}`);
+  const ids = (j.items||[]).map(i=>i.id.videoId).filter(id=>id && !rejected.includes(id));
+  if(!ids.length){ resolved[s.n]={status:"missing",rejected}; return; }
+  const cands = (await details(ids)).map(c=>({...c,sc:score(c,s)})).filter(c=>c.sc>-Infinity).sort((a,b)=>b.sc-a.sc);
+  if(!cands.length){ resolved[s.n]={status:"missing",rejected}; return; }
+  resolved[s.n]={...pick(cands[0],s), alts:cands.slice(1,8).map(c=>pick(c,s)), rejected};
+}
+async function nextMatch(s){
+  const r=resolved[s.n]||{}, st=$("findStatus"); st.classList.remove("err");
+  const rejected=[...(r.rejected||[]), ...(r.id?[r.id]:[])];
+  const history=[...(r.history||[]), ...(r.id?[{id:r.id,title:r.title,channel:r.channel,dur:r.dur,status:r.status,note:r.note,manual:r.manual}]:[])];
+  if(r.alts && r.alts.length){
+    resolved[s.n]={...r.alts[0], alts:r.alts.slice(1), rejected, history};
+  } else {
+    apiKey = $("apikey").value.trim();
+    if(!apiKey){ st.textContent="Paste your API key to search for another match."; st.classList.add("err"); return; }
+    try{ st.textContent=`Searching again for ${s.title}…`; await findOne(s, rejected); resolved[s.n].history=history; st.textContent=""; }
+    catch(e){ st.textContent=e.message; st.classList.add("err"); return; }
+  }
+  $("p"+s.n).value=""; save(); updateRow(s); updateCount();
+  if(resolved[s.n].id) preview(s); else st.textContent=`No more results for ${s.title}. Paste a link instead.`;
+}
+async function undoMatch(s){
+  const r=resolved[s.n]; if(!r||!r.rejected||!r.rejected.length) return;
+  const rejected=r.rejected.slice(0,-1), prevId=r.rejected[r.rejected.length-1];
+  const history=(r.history||[]).slice();
+  let prev = history.length && history[history.length-1].id===prevId ? history.pop() : {id:prevId,status:"ok",channel:"Restored"};
+  const cur = r.id ? [{id:r.id,title:r.title,channel:r.channel,dur:r.dur,status:r.status,note:r.note}] : [];
+  resolved[s.n]={...prev, alts:[...cur, ...(r.alts||[])], rejected, history};
+  if(!prev.title && apiKey){ try{ const [d]=await details([prevId]); if(d) Object.assign(resolved[s.n],pick(d,s)); }catch(e){} }
+  $("p"+s.n).value=""; save(); updateRow(s); updateCount(); preview(s);
+}
+async function findAll(redo){
+  apiKey = $("apikey").value.trim(); LS.set("lsc.key",apiKey);
+  const st=$("findStatus"); st.classList.remove("err");
+  if(!apiKey){ st.textContent="Paste an API key first."; st.classList.add("err"); return; }
+  const todo = SONGS.filter(s=>{ const r=resolved[s.n]; return !r || (redo && !r.manual) || r.status==="missing"; });
+  if(!todo.length){ st.textContent="Everything already has a video. Use “Redo automatic matches” to search again."; return; }
+  $("findBtn").disabled=$("redoBtn").disabled=true;
+  let i=0;
+  try{
+    for(const s of todo){
+      i++; st.textContent=`Searching ${i} of ${todo.length}: ${s.title}…`;
+      await findOne(s); save(); updateRow(s); updateCount();
+    }
+    const flagged = SONGS.filter(s=>resolved[s.n]&&["check","missing"].includes(resolved[s.n].status)).length;
+    st.textContent = flagged ? `Done. ${flagged} flagged: preview those, and paste a better link if one sounds off.` : "Done. Everything matched.";
+  }catch(e){ st.textContent=e.message; st.classList.add("err"); }
+  $("findBtn").disabled=$("redoBtn").disabled=false;
+}
+
+// ---- player ----
+const tag=document.createElement("script"); tag.src="https://www.youtube.com/iframe_api"; document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady = () => {
+  player = new YT.Player("yt",{
+    width:"100%",height:"100%",
+    playerVars:{playsinline:1,rel:0,modestbranding:1},
+    events:{
+      onReady:()=>{ ready=true; },
+      onStateChange:e=>{ if(e.data===YT.PlayerState.ENDED && mode==="play") finish(); },
+      onError:e=>{
+        const n = cur && cur.n;
+        if(n && [100,101,150].includes(e.data)){ resolved[n]={...resolved[n],status:"blocked",note:"YouTube blocked playback here; paste another link."}; save(); updateRow(song(n)); updateCount(); }
+        if(mode==="play"){ $("showNote").textContent=`“${cur.title}” wouldn't play, so it was skipped.`; finish(); }
+        else mode=null;
+      }
+    }
+  });
+};
+function load(s){
+  cur=s; curId=vidOf(s.n); paused=false; phase=1;
+  player.setVolume(100); player.unMute();
+  player.loadVideoById({videoId:curId,startSeconds:s.start});
+}
+function stop(){ mode=null; if(player&&ready) player.pauseVideo(); paused=false; }
+
+setInterval(()=>{
+  if(!mode||!player||!ready||!cur) return;
+  const vd = player.getVideoData && player.getVideoData();
+  if(!vd || vd.video_id!==curId || player.getPlayerState()!==1) return;
+  const t = player.getCurrentTime(), s=cur;
+  if(mode==="play"){
+    const p = Math.min(1,Math.max(0,(t-s.start)/(s.end-s.start)));
+    $("bar").style.width=(p*100)+"%";
+    $("songSub").textContent = `${fmtR(s.end-t)} left`;
+    if(t>=s.end-FADE) player.setVolume(Math.max(0,Math.round((s.end-t)/FADE*100)));
+    if(t>=s.end) finish();
+  } else if(mode==="preview"){
+    if(phase===1 && t>=s.start+PREVIEW){ phase=2; if(s.end-PREVIEW>t) player.seekTo(s.end-PREVIEW,true); }
+    else if(phase===2 && t>=s.end){ stop(); }
+  }
+},100);
+
+function preview(s){
+  if(!ready){ $("findStatus").textContent="The player is still loading. Try again in a second."; return; }
+  mode="preview"; load(s);
+}
+
+// ---- show ----
+function shuffle(){
+  order = playable();
+  for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+  pos=0; save();
+}
+function curShowSong(){
+  while(pos<order.length && !vidOf(order[pos])) pos++;
+  return pos<order.length ? song(order[pos]) : null;
+}
+function renderShow(){
+  const s = curShowSong(), playing = mode==="play";
+  $("barWrap").hidden = !playing;
+  $("backBtn").disabled = !order.length;
+  $("nextBtn").disabled = !s;
+  if(!order.length){
+    $("upLabel").textContent="Nothing queued";
+    $("songTitle").textContent="No songs ready";
+    $("songArtist").textContent="Find videos in Setup, then hit Reshuffle.";
+    $("songSub").textContent=""; $("mainBtn").disabled=true; return;
+  }
+  if(!s){
+    $("upLabel").textContent="That's a wrap";
+    $("songTitle").textContent="All songs played";
+    $("songArtist").textContent="Reshuffle to go again.";
+    $("songSub").textContent=""; $("mainBtn").disabled=true; return;
+  }
+  $("mainBtn").disabled=false;
+  $("upLabel").textContent = playing ? (paused?"Paused":"Now playing") : `Up next · song ${pos+1} of ${order.length}`;
+  $("songTitle").textContent = s.title;
+  $("songArtist").textContent = s.artist;
+  if(!playing){ $("songSub").textContent = `${fmt(s.end-s.start)} clip`; $("bar").style.width="0"; }
+  $("mainBtn").innerHTML = (playing ? (paused?"Resume":"Pause") : "Start") + '<span class="kbd">space</span>';
+}
+function main(){
+  const s=curShowSong(); if(!s) return;
+  if(mode!=="play"){
+    if(!ready){ $("showNote").textContent="The player is still loading. Try again in a second."; return; }
+    $("showNote").textContent=""; mode="play"; load(s);
+  } else if(paused){ player.playVideo(); paused=false; }
+  else { player.pauseVideo(); paused=true; }
+  renderShow();
+}
+function finish(){ stop(); pos++; save(); renderShow(); }
+function back(){
+  if(mode==="play"){ stop(); }        // restart this song from the Up next screen
+  else { pos=Math.max(0,pos-1); }
+  save(); renderShow();
+}
+function next(){ stop(); if(pos<order.length) pos++; save(); renderShow(); }
+
+// ---- tabs & wiring ----
+function setTab(t){
+  if(mode==="preview") stop();
+  document.body.classList.remove("mode-setup","mode-show"); document.body.classList.add("mode-"+t); LS.set("lsc.tab",t);
+  $("setup").hidden = t!=="setup"; $("show").hidden = t!=="show";
+  $("tabSetup").setAttribute("aria-selected",t==="setup"); $("tabShow").setAttribute("aria-selected",t==="show");
+  if(t==="show"){ if(!order.length) shuffle(); renderShow(); }
+}
+$("tabSetup").onclick=()=>setTab("setup");
+$("tabShow").onclick=()=>setTab("show");
+$("findBtn").onclick=()=>findAll(false);
+$("redoBtn").onclick=()=>findAll(true);
+$("mainBtn").onclick=main; $("backBtn").onclick=back; $("nextBtn").onclick=next;
+$("shuffleBtn").onclick=()=>{ stop(); shuffle(); $("showNote").textContent=`Shuffled ${order.length} songs.`; renderShow(); };
+$("fsBtn").onclick=()=>{ const el=document.documentElement; (document.fullscreenElement?document.exitFullscreen():el.requestFullscreen?.())?.catch?.(()=>{}); };
+$("copyBtn").onclick=async()=>{
+  try{ await navigator.clipboard.writeText($("exportBox").value); $("copyMsg").textContent="Copied"; }
+  catch(e){ $("exportBox").select(); $("copyMsg").textContent="Selected. Press Ctrl/Cmd+C"; }
+};
+document.addEventListener("keydown",e=>{
+  if($("show").hidden || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if(e.code==="Space"){ e.preventDefault(); main(); }
+  else if(e.key==="ArrowRight") next();
+  else if(e.key==="ArrowLeft") back();
+});
+
+function setVideo(hide){ document.body.classList.toggle("hide-video",hide); $("vidBtn").textContent = hide?"Show video":"Hide video"; LS.set("lsc.hideVideo",hide); }
+$("vidBtn").onclick=()=>setVideo(!document.body.classList.contains("hide-video"));
+$("apikey").value = apiKey;
+renderRows(); updateCount();
+setVideo(LS.get("lsc.hideVideo",false));
+setTab(LS.get("lsc.tab", playable().length===SONGS.length ? "show" : "setup"));
+</script>
+</body>
+</html>
