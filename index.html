@@ -93,7 +93,8 @@ td input.paste{width:150px;background:var(--bg);border:1px solid var(--line);bor
 .bar{height:8px;background:var(--panel-2);border-radius:999px;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--hot),var(--bulb))}
 .controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
-.controls .big{font:800 20px var(--f-display);padding:12px 32px;border-radius:14px}
+.controls .big{font:800 20px var(--f-display);padding:12px 28px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:11em}
+.controls .big .kbd{margin-left:0;line-height:1.4}
 .note{min-height:1.5em;color:var(--warn);font-size:14px;text-align:center}
 .subcontrols{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 
@@ -154,7 +155,7 @@ body.mode-show.hide-video #playerWrap{position:absolute;width:1px;height:1px;opa
     <h2 id="songTitle">—</h2>
     <div class="artist" id="songArtist"></div>
     <div class="sub" id="songSub"></div>
-    <div class="bar" id="barWrap" hidden><i id="bar"></i></div>
+    <div class="bar" id="barWrap" style="visibility:hidden"><i id="bar"></i></div>
     <div class="controls">
       <button class="btn" id="backBtn">◀ Back</button>
       <button class="btn primary big" id="mainBtn">Start<span class="kbd">space</span></button>
@@ -452,7 +453,7 @@ function curShowSong(){
 }
 function renderShow(){
   const s = curShowSong(), playing = mode==="play";
-  $("barWrap").hidden = !playing;
+  $("barWrap").style.visibility = playing ? "visible" : "hidden";
   $("backBtn").disabled = !order.length;
   $("nextBtn").disabled = !s;
   if(!order.length){
