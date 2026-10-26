@@ -67,7 +67,7 @@ footer{color:var(--muted);font-size:13px;padding-block:0 32px}
 <body>
 <header class="wrap">
   <h1 class="mark">Lip <span>Sync</span><small>Practice room</small></h1>
-  <p>Every song in the pool, cut exactly how it plays on the night. Tap one to hear just that part. Turn on Loop to drill it.</p>
+  <p>Every song in the pool, cut exactly how it plays on the night. Hit Play to run through all of them, or tap one to start there. Turn on Loop to drill a single song.</p>
   <div class="hrow">
     <button class="btn" id="copyBtn">Copy list for group chat</button>
     <span id="copyMsg" aria-live="polite"></span>
@@ -78,11 +78,12 @@ footer{color:var(--muted);font-size:13px;padding-block:0 32px}
   <div class="wrap stagein">
     <div id="playerWrap"><div id="yt"></div></div>
     <div class="now">
-      <div id="nowTitle">Pick a song below</div>
+      <div id="nowTitle">All songs, A–Z</div>
       <div id="nowSub">35 songs</div>
       <div class="bar"><i id="bar"></i></div>
       <div class="ctl">
-        <button class="btn" id="playBtn" disabled>Play</button>
+        <button class="btn primary" id="playBtn">Play all</button>
+        <button class="btn" id="nextBtn" disabled>Next</button>
         <label class="loop" for="loop"><input type="checkbox" id="loop"> Loop</label>
       </div>
     </div>
@@ -162,10 +163,11 @@ window.onYouTubeIframeAPIReady = () => {
     events:{
       onReady:()=>{ ready=true; if(pendingN) play(pendingN); },
       onStateChange:e=>{ if(e.data===YT.PlayerState.ENDED && playing) end(); },
-      onError:()=>{ if(cur){ $("nowSub").textContent="This one won't play here. Try the YouTube link."; playing=false; setBtn(); } }
+      onError:()=>{ if(cur){ const i=idx(cur); if(playing && i<list.length-1){ play(list[i+1].n); return; } $("nowSub").textContent="This one won't play here. Try the YouTube link."; playing=false; setBtn(); } }
     }});
 };
-function setBtn(){ $("playBtn").disabled=!cur; $("playBtn").textContent = playing ? "Stop" : (cur ? "Play again" : "Play"); }
+function setBtn(){ $("playBtn").textContent = playing ? "Pause" : (cur ? "Play" : "Play all"); $("nextBtn").disabled = !cur || idx(cur)>=list.length-1; }
+const idx = s => list.findIndex(x=>x.n===s.n);
 function play(n){
   const s=SONGS[n-1]; if(!s) return;
   document.querySelectorAll(".row[aria-current]").forEach(r=>r.removeAttribute("aria-current"));
@@ -180,7 +182,10 @@ function play(n){
 function end(){
   if(!cur) return;
   if($("loop").checked){ player.seekTo(cur.start,true); player.setVolume(100); player.playVideo(); return; }
-  playing=false; player.pauseVideo(); player.setVolume(100); $("bar").style.width="100%"; setBtn();
+  const i=idx(cur);
+  if(i<list.length-1){ play(list[i+1].n); return; }      // keep going down the list
+  playing=false; player.pauseVideo(); player.setVolume(100); $("bar").style.width="100%";
+  $("nowSub").textContent="That's every song."; cur=null; setBtn();
 }
 setInterval(()=>{
   if(!playing||!ready||!cur) return;
@@ -194,7 +199,12 @@ setInterval(()=>{
 },100);
 
 $("list").addEventListener("click",e=>{ const b=e.target.closest(".row"); if(b) play(+b.dataset.n); });
-$("playBtn").onclick=()=>{ if(!cur) return; if(playing){ playing=false; player.pauseVideo(); player.setVolume(100); setBtn(); } else play(cur.n); };
+$("playBtn").onclick=()=>{
+  if(!cur){ play(list[0].n); return; }
+  if(playing){ playing=false; player.pauseVideo(); setBtn(); }
+  else { playing=true; player.playVideo(); setBtn(); }
+};
+$("nextBtn").onclick=()=>{ if(cur && idx(cur)<list.length-1) play(list[idx(cur)+1].n); };
 
 $("copyBtn").onclick=async()=>{
   const text = ["Lip sync song pool. Practice the exact cuts here: "+location.href, ""]
